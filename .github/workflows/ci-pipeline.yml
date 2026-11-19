@@ -1,0 +1,52 @@
+# Pipeline de CI/CD del proyecto TDD Máquina de Café (C# / .NET 8 / xUnit).
+# Cada push o pull request compila la solución y ejecuta las 19 pruebas.
+# Si una prueba falla, el pipeline se pone en rojo.
+name: CI Pipeline
+
+# Eventos que disparan el workflow:
+#   push              -> cada vez que se suben commits a cualquier rama
+#   pull_request      -> cada vez que se abre o actualiza un pull request
+#   workflow_dispatch -> permite ejecutarlo a mano desde la pestaña Actions
+on: [push, pull_request, workflow_dispatch]
+
+# El workflow solo necesita leer el código (buena práctica de seguridad).
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # máquina virtual Linux limpia que presta GitHub
+
+    steps:
+      # 1. Descarga el código del repositorio dentro de la máquina virtual.
+      - name: Clonar repositorio
+        uses: actions/checkout@v6
+
+      # 2. Instala el SDK de .NET 8 (la misma versión del proyecto).
+      - name: Configurar entorno .NET 8
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      # 3. Descarga los paquetes NuGet (xUnit, Test SDK, etc.).
+      - name: Restaurar dependencias
+        run: dotnet restore MaquinaCafeTDD.sln
+
+      # 4. Compila la solución en modo Release.
+      - name: Compilar proyecto
+        run: dotnet build MaquinaCafeTDD.sln --no-restore --configuration Release
+
+      # 5. Ejecuta las pruebas de TDD y muestra cada prueba en el registro.
+      - name: Ejecutar pruebas
+        run: dotnet test MaquinaCafeTDD.sln --no-build --configuration Release --logger "console;verbosity=normal"
+
+      # 6. (CD) Empaqueta la biblioteca compilada en la carpeta "publicacion".
+      - name: Empaquetar artefacto
+        run: dotnet publish MaquinaCafe/MaquinaCafe.csproj --no-build --configuration Release --output publicacion
+
+      # 7. (CD) Guarda el paquete para descargarlo desde la ejecución en Actions.
+      - name: Publicar artefacto
+        uses: actions/upload-artifact@v6
+        with:
+          name: maquina-cafe
+          path: publicacion
